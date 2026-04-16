@@ -1,2 +1,2 @@
 # Notebooks
-Store Jupyter notebooks for EDA, feature engineering, and model evaluation here.
+Store all Jupyter notebooks here — EDA, feature engineering, and model evaluation notebooks all go in this folder.
