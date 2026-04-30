@@ -322,3 +322,4 @@ print("Saved: linear_regression_model.h5")
 sample_y_pred = model.predict(np.array([[75.0]]), verbose=0)[0][0]
 print(f"\nSanity check - x=75 -> predicted={sample_y_pred:.2f} (expected ~85.00)")
 print("Pipeline completed successfully.")
+
