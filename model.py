@@ -197,3 +197,82 @@ print(f"Dataset: synthetic (y = x + 10), {len(X)} samples, no sampling bias")
 # necessary even though there's only one feature
 X = X.reshape(-1, 1)
 y = y.reshape(-1, 1)
+
+# fixed 80/20 train/test split using a hard-coded index rather than random
+# shuffling - this ensures the exact same split happens every single run,
+# which is important for reproducibility and fair comparison across runs
+split_idx = 40
+X_train = X[:split_idx]   # first 40 samples for training
+y_train = y[:split_idx]
+X_test  = X[split_idx:]   # last 10 samples held out for testing
+y_test  = y[split_idx:]
+
+print(f"Training: {len(X_train)} samples, Test: {len(X_test)} samples")
+
+
+# model
+
+print("Building model...")
+
+# set seeds before building and training so results are reproducible.
+# without this the weight initialisation is random and the model could
+# converge to slightly different values each run
+tf.random.set_seed(42)
+np.random.seed(42)
+
+# single dense layer with one output unit - this is the right choice for
+# a simple linear regression task where the relationship is y = W*x + b.
+# the learned weight and bias then fully explain every prediction the model
+# makes, which is good from an interpretability standpoint.
+#
+# one thing worth mentioning - a more complex architecture with hidden relu
+# layers would actually perform worse here. relu kills negative activations
+# by outputting zero for any negative input, and our x values range from
+# -100 to 100, so a relu hidden layer would zero out half the signal and
+# make it much harder for the model to learn the full linear relationship.
+# keeping it simple here is both more interpretable and more accurate.
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(
+        units=1,              # single output - predicting one value per input
+        input_shape=(1,),     # one input feature (the x value)
+        name='linear_layer'   # named so model.summary() is easy to read
+    )
+], name='linear_regression_model')
+
+# adam optimiser with gradient clipping applied.
+# gradient clipping (clipnorm=1.0) means if any gradient's l2 norm exceeds
+# 1.0 during backpropagation it gets scaled down to that maximum. this
+# prevents exploding gradients which can cause training to become unstable
+# or the loss to go to NaN, especially in the early epochs when the weights
+# are far from their optimal values. adam is used instead of plain sgd
+# because it converges much faster for this kind of task
+optimizer = tf.keras.optimizers.Adam(
+    learning_rate=0.1,   # relatively high lr is fine here since adam adapts it
+    clipnorm=1.0         # scale down any gradients that exceed this norm
+)
+
+# mae loss is a natural fit for regression - it's the average absolute
+# difference between predicted and actual values, easy to interpret
+model.compile(loss='mae', optimizer=optimizer, metrics=['mae'])
+model.summary()
+
+
+# training
+
+print("Training...")
+
+# training for 500 epochs with 20% of the training data held back for
+# validation each epoch. adam converges a lot faster than sgd so 500 epochs
+# is more than enough to get the model really close to the true relationship.
+# verbose=0 keeps the actions log clean - no point printing 500 lines of
+# per-epoch output when a summary at the end is more useful
+history = model.fit(
+    X_train, y_train,
+    epochs=500,
+    verbose=0,             # suppress per-epoch output
+    validation_split=0.2   # hold back 20% of training data for validation
+)
+
+# print a quick summary of how training went
+print(f"Final training loss   : {history.history['loss'][-1]:.4f}")
+print(f"Final validation loss : {history.history['val_loss'][-1]:.4f}")
