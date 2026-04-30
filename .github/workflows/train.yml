@@ -42,4 +42,21 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-            
+
+      # installs everything listed in requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # runs model.py which trains the model and saves the output files
+      - name: Train model
+        run: python model.py
+        
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-results
+          path: |
+            model_results.png
+            training_history.png
+            metrics.txt
+            linear_regression_model.h5
