@@ -50,7 +50,9 @@ jobs:
       # runs model.py which trains the model and saves the output files
       - name: Train model
         run: python model.py
-        
+
+      # uploads the generated files as downloadable artefacts so they
+      # can be accessed from the GitHub Actions UI after the run finishes
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
