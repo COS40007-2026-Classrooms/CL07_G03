@@ -1,42 +1,15 @@
 name: Train ML Model
 
 on:
+  # runs automatically every time someone pushes to main
   push:
-    branches: [ main ] 
-  pull_request:
-    branches: [ main ] 
-  workflow_dispatch: 
+    branches: [ main ]
 
-jobs:
-  train:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-      
-      - name: Train model
-        run: python model.py
-      
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-results
-          path: |
-            model_results.png
-            metrics.txt
+  # also runs when a pull request is opened targeting main
+  # useful for catching issues before merging
+  pull_request:
+    branches: [ main ]
+
+  # allows the pipeline to be triggered manually from the
+  # GitHub Actions UI without needing to do a git push
+  workflow_dispatch:
