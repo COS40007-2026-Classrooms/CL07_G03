@@ -178,3 +178,22 @@ def save_metrics(mae, mse, rmse, weights, filename='metrics.txt'):
     print(f"Saved: {filename}")
 
 
+# data preparation
+
+print(f"TensorFlow version: {tf.__version__}")
+print("Setting up data...")
+
+# generate synthetic data with a simple linear relationship: y = x + 10
+# using arange so the values are evenly spaced and completely deterministic.
+# this is important because it means every pipeline run produces the exact
+# same data, which makes results reproducible and easy to verify
+X = np.arange(-100, 100, 4)   # 50 values from -100 to 96 with step 4
+y = np.arange(-90, 110, 4)    # corresponding y values where y = x + 10
+
+print(f"Dataset: synthetic (y = x + 10), {len(X)} samples, no sampling bias")
+
+# reshape from 1D (50,) to 2D (50, 1) - keras dense layers expect the input
+# to have shape (samples, features) not just a flat array, so this step is
+# necessary even though there's only one feature
+X = X.reshape(-1, 1)
+y = y.reshape(-1, 1)
