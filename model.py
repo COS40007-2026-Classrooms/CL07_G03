@@ -276,3 +276,49 @@ history = model.fit(
 # print a quick summary of how training went
 print(f"Final training loss   : {history.history['loss'][-1]:.4f}")
 print(f"Final validation loss : {history.history['val_loss'][-1]:.4f}")
+
+
+# evaluation
+
+print("Evaluating...")
+
+# run predictions on the held-out test set - these are samples the model
+# has never seen during training so this gives a fair measure of performance
+y_preds     = model.predict(X_test, verbose=0).flatten()
+y_test_flat = y_test.flatten()
+
+mae, mse, rmse = calculate_metrics(y_test_flat, y_preds)
+weights        = model.get_weights()
+
+print(f"MAE  : {mae:.4f}")
+print(f"MSE  : {mse:.4f}")
+print(f"RMSE : {rmse:.4f}")
+
+# print the learned parameters so it's easy to see what the model picked up
+if len(weights) >= 2:
+    print(f"Learned: y = {weights[0][0][0]:.4f}*x + {weights[1][0]:.4f}")
+    print(f"Expected: y = 1.0000*x + 10.0000")
+
+
+# save outputs
+
+# generate and save the plots and metrics file - these all get picked up
+# by the upload step in train.yml and made available as downloadable artefacts
+plot_predictions(
+    X_train.flatten(), y_train.flatten(),
+    X_test.flatten(), y_test_flat,
+    y_preds
+)
+plot_training_history(history)
+save_metrics(mae, mse, rmse, weights)
+
+# save the model weights so they can be loaded later without retraining
+model.save('linear_regression_model.h5')
+print("Saved: linear_regression_model.h5")
+
+# quick sanity check on an input the model hasn't seen - x=75 should
+# give something close to 85 (since y = x + 10). if it's way off then
+# something has gone wrong with training
+sample_y_pred = model.predict(np.array([[75.0]]), verbose=0)[0][0]
+print(f"\nSanity check - x=75 -> predicted={sample_y_pred:.2f} (expected ~85.00)")
+print("Pipeline completed successfully.")
