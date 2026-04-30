@@ -244,6 +244,7 @@ print(f"\nExample prediction: X={sample_input[0][0]:.0f} -> y={sample_prediction
 print("\n" + "="*50)
 print("LEARNED RELATIONSHIP")
 print("="*50)
+
 # Get model weights
 weights = model.get_weights()
 if len(weights) >= 2:
@@ -255,3 +256,4 @@ if len(weights) >= 2:
 print("\n" + "="*50)
 print("SCRIPT COMPLETED SUCCESSFULLY")
 print("="*50)
+

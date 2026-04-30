@@ -1,7 +1,9 @@
-tensorflow
-numpy
-matplotlib
-pandas
-seaborn
-keras
-category_encoders 
+# requirements.txt - CL07_G03 ML Pipeline Dependencies
+# Pinned versions for pipeline stability and reproducibility
+
+tensorflow==2.15.0   # Core deep learning framework - used to build and train the model
+numpy==1.26.4        # Numerical operations - used for data generation and metric calculations
+matplotlib==3.8.4    # Plotting library - used to generate model_results.png and training_history.png
+pandas==2.2.2        # Data handling - used for any tabular data processing
+seaborn==0.13.2      # Statistical visualisation - used for enhanced plot styling
+keras==2.15.0        # High-level neural network API - bundled with tensorflow but listed explicitly
