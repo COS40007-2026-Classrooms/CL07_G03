@@ -13,3 +13,33 @@ on:
   # allows the pipeline to be triggered manually from the
   # GitHub Actions UI without needing to do a git push
   workflow_dispatch:
+
+jobs:
+  train:
+    # ubuntu-latest is the free GitHub-hosted linux runner
+    runs-on: ubuntu-latest
+
+    steps:
+      # pulls the repo code into the runner so the rest of
+      # the steps can actually access the files
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # installs python 3.11 on the runner - pinning the version
+      # keeps the environment consistent across runs
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # caches pip packages based on a hash of requirements.txt
+      # so repeat runs don't have to re-download everything each time.
+      # the cache gets invalidated automatically if requirements.txt changes
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            
