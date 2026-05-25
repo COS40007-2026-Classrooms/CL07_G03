@@ -10,7 +10,6 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 from tensorflow.keras.models import load_model
 
-# create output directories
 os.makedirs("monitoring/alerts", exist_ok=True)
 os.makedirs("monitoring/logs", exist_ok=True)
 os.makedirs("monitoring/reports", exist_ok=True)
@@ -18,8 +17,10 @@ os.makedirs("reports", exist_ok=True)
 os.makedirs("logs", exist_ok=True)
 os.makedirs("artifacts/metrics", exist_ok=True)
 
-# configure logging - writes to both console and a file so there's a
-# persistent record of every monitoring run tied to its timestamp
+# set up logging to write to both the console and a persistent file.
+# this means every monitoring run leaves a record with timestamps so
+# you can always trace back when drift was detected and what triggered it -
+# which ties into the accountability principle from our Week 7 RAI content
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -30,10 +31,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# drift thresholds agreed on in the group's Task 1 design:
-#   - PSI > 0.25 indicates significant data drift in input features
-#   - KS p-value < 0.05 indicates statistically significant concept drift
-#   - RMSE degradation > 10% over baseline triggers a retraining alert
+# drift thresholds from our Task 1 MLOps design.
+# these come directly from what we covered in Seminar 9 on monitoring -
+# PSI > 0.25 flags significant data drift in input features,
+# KS p < 0.05 flags statistically significant concept drift,
+# and RMSE going more than 10% above baseline means performance has degraded
 PSI_THRESHOLD     = 0.25
 KS_P_THRESHOLD    = 0.05
 RMSE_DRIFT_FACTOR = 1.10
@@ -41,22 +43,23 @@ RMSE_DRIFT_FACTOR = 1.10
 
 def calculate_psi(expected, actual, buckets=10):
     """
-    Population Stability Index (PSI) measures how much the distribution
-    of a feature has shifted between a reference window (training data)
-    and a monitoring window (recent inference data).
+    Population Stability Index (PSI) - covered in Seminar 9 as one of the
+    main techniques for detecting data drift in input features.
 
-    PSI < 0.10  - no significant change
-    PSI 0.10-0.25 - moderate shift, worth monitoring
-    PSI > 0.25  - significant shift, triggers a data drift alert
+    It works by bucketing both distributions and comparing the proportion
+    of values in each bucket. a high PSI score means the feature distribution
+    has shifted significantly between when the model was trained and now,
+    which can cause the model to perform worse on new data.
 
-    The index is calculated by bucketing both distributions and comparing
-    the proportion of values in each bucket. buckets with zero actual
-    observations are floored at 0.0001 to avoid log(0) errors.
+    PSI < 0.10  - no real change, all good
+    PSI 0.10 to 0.25 - moderate shift, worth keeping an eye on
+    PSI > 0.25  - significant drift, retraining recommended
+
+    I floored empty buckets at 0.0001 to avoid log(0) errors
     """
     expected_counts, bin_edges = np.histogram(expected, bins=buckets)
     actual_counts, _           = np.histogram(actual, bins=bin_edges)
 
-    # convert to proportions and floor at a small epsilon to avoid log(0)
     expected_pct = np.where(expected_counts == 0, 0.0001,
                             expected_counts / len(expected))
     actual_pct   = np.where(actual_counts == 0, 0.0001,
@@ -68,17 +71,17 @@ def calculate_psi(expected, actual, buckets=10):
 
 def run_ks_test(train_preds, test_preds):
     """
-    Kolmogorov-Smirnov test for concept drift.
-    Compares the distribution of model predictions on the training set
-    against predictions on the test set. A low p-value (< 0.05) means
-    the two distributions are statistically different, which is a signal
-    that the model's learned relationship may no longer hold on new data.
+    Kolmogorov-Smirnov test for concept drift - also from Seminar 9.
+    I used this to compare the distribution of predictions on training data
+    vs test data. if the two distributions are statistically different
+    (p < 0.05), it's a signal that the model's learned relationship may
+    not be holding up on newer data - basically the data has changed in a
+    way that the model wasn't trained to handle
     """
     statistic, p_value = stats.ks_2samp(train_preds, test_preds)
     return float(statistic), float(p_value)
 
 
-# load model and data
 logger.info("Loading model and data...")
 model   = load_model("artifacts/models/model.keras")
 x_train = np.load("artifacts/data/x_train.npy")
@@ -86,26 +89,29 @@ y_train = np.load("artifacts/data/y_train.npy")
 x_test  = np.load("artifacts/data/x_test.npy")
 y_test  = np.load("artifacts/data/y_test.npy")
 
-# load baseline RMSE from evaluation metrics if available.
-# this is the reference point for the RMSE degradation check
+# load the baseline RMSE from the evaluate stage so I can compare
+# current performance against it. if the file doesn't exist yet
+# I skip the RMSE check rather than crashing the whole monitoring run
 baseline_rmse = None
 eval_path     = "artifacts/metrics/evaluation_metrics.json"
 if os.path.exists(eval_path):
     with open(eval_path) as f:
-        eval_metrics  = json.load(f)
+        eval_metrics = json.load(f)
     baseline_rmse = eval_metrics.get("overall", {}).get("RMSE")
     logger.info(f"Baseline RMSE loaded: {baseline_rmse:.2f}")
 else:
     logger.warning("No evaluation_metrics.json found - skipping RMSE drift check")
 
-# generate predictions on both train and test sets for drift analysis
 logger.info("Generating predictions...")
 train_preds = model.predict(x_train, verbose=0)
 test_preds  = model.predict(x_test,  verbose=0)
 
 zone_names = ["Zone 1", "Zone 2", "Zone 3"]
 
-# data drift detection - PSI on each input feature
+# data drift detection using PSI on each input feature.
+# I compare the training distribution (reference window) against the test
+# distribution (monitoring window) to see if anything has shifted enough
+# to be a problem - this is the approach recommended in Seminar 9
 logger.info("Running PSI data drift detection...")
 feature_names = [
     "Temperature", "Humidity", "Wind Speed",
@@ -113,31 +119,35 @@ feature_names = [
     "hour_of_day", "day_of_week", "month", "is_weekend"
 ]
 
-psi_results    = {}
+psi_results         = {}
 data_drift_detected = False
 
 for i, feat in enumerate(feature_names):
-    psi = calculate_psi(x_train[:, i], x_test[:, i])
+    psi               = calculate_psi(x_train[:, i], x_test[:, i])
     psi_results[feat] = psi
-    status = "DRIFT" if psi > PSI_THRESHOLD else "OK"
+    status            = "DRIFT" if psi > PSI_THRESHOLD else "OK"
     if psi > PSI_THRESHOLD:
         data_drift_detected = True
     logger.info(f"  PSI [{feat}]: {psi:.4f} [{status}]")
 
-# concept drift detection - KS test on prediction distributions per zone
+# concept drift detection using the KS test on prediction distributions.
+# this checks whether the model is predicting differently on test data
+# compared to training data - a sign the underlying relationship has shifted
 logger.info("Running KS concept drift detection...")
-ks_results            = {}
+ks_results             = {}
 concept_drift_detected = False
 
 for i, zone in enumerate(zone_names):
-    ks_stat, ks_p = run_ks_test(train_preds[:, i], test_preds[:, i])
+    ks_stat, ks_p    = run_ks_test(train_preds[:, i], test_preds[:, i])
     ks_results[zone] = {"statistic": ks_stat, "p_value": ks_p}
-    status = "DRIFT" if ks_p < KS_P_THRESHOLD else "OK"
+    status           = "DRIFT" if ks_p < KS_P_THRESHOLD else "OK"
     if ks_p < KS_P_THRESHOLD:
         concept_drift_detected = True
     logger.info(f"  KS [{zone}]: stat={ks_stat:.4f}, p={ks_p:.4f} [{status}]")
 
-# performance monitoring - rolling RMSE vs baseline
+# performance monitoring - check current RMSE against the baseline.
+# if it's gone up by more than 10% that's a meaningful enough drop to
+# warrant retraining rather than just normal variance between runs
 logger.info("Running performance monitoring...")
 current_rmse = float(np.sqrt(mean_squared_error(
     y_test.flatten(), test_preds.flatten()
@@ -152,42 +162,41 @@ if baseline_rmse:
     logger.info(f"RMSE ratio vs baseline: {rmse_ratio:.4f} "
                 f"({'DEGRADED' if perf_degraded else 'OK'})")
 
-# compile full monitoring report
 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 report = {
-    "timestamp":             timestamp,
-    "data_drift_detected":   data_drift_detected,
+    "timestamp":              timestamp,
+    "data_drift_detected":    data_drift_detected,
     "concept_drift_detected": concept_drift_detected,
-    "performance_degraded":  perf_degraded,
+    "performance_degraded":   perf_degraded,
     "retraining_recommended": data_drift_detected or concept_drift_detected or perf_degraded,
-    "psi_threshold":         PSI_THRESHOLD,
-    "ks_p_threshold":        KS_P_THRESHOLD,
-    "rmse_drift_factor":     RMSE_DRIFT_FACTOR,
-    "current_rmse":          current_rmse,
-    "baseline_rmse":         baseline_rmse,
-    "rmse_ratio":            rmse_ratio,
-    "psi_results":           psi_results,
-    "ks_results":            ks_results
+    "psi_threshold":          PSI_THRESHOLD,
+    "ks_p_threshold":         KS_P_THRESHOLD,
+    "rmse_drift_factor":      RMSE_DRIFT_FACTOR,
+    "current_rmse":           current_rmse,
+    "baseline_rmse":          baseline_rmse,
+    "rmse_ratio":             rmse_ratio,
+    "psi_results":            psi_results,
+    "ks_results":             ks_results
 }
 
-# save drift report JSON
 with open("reports/drift_report.json", "w") as f:
     json.dump(report, f, indent=2)
 logger.info("Saved: reports/drift_report.json")
 
-# save monitoring metrics to artifacts for DVC tracking
 with open("artifacts/metrics/monitoring_metrics.json", "w") as f:
     json.dump({
-        "timestamp":    timestamp,
-        "current_rmse": current_rmse,
-        "baseline_rmse": baseline_rmse,
-        "data_drift":   data_drift_detected,
-        "concept_drift": concept_drift_detected,
+        "timestamp":              timestamp,
+        "current_rmse":           current_rmse,
+        "baseline_rmse":          baseline_rmse,
+        "data_drift":             data_drift_detected,
+        "concept_drift":          concept_drift_detected,
         "retraining_recommended": report["retraining_recommended"]
     }, f, indent=2)
 
-# write alert log if any drift or degradation was detected
+# write an alert file if anything triggered a retraining recommendation.
+# this gives a clear written record of what caused the alert and when,
+# which ties into the accountability and transparency principles from Week 7
 if report["retraining_recommended"]:
     alert_file = f"monitoring/alerts/alert_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     reasons    = []
@@ -207,7 +216,9 @@ if report["retraining_recommended"]:
         f.write(f"Baseline RMSE: {baseline_rmse}\n")
     logger.warning(f"Alert written to {alert_file}")
 
-# generate HTML monitoring dashboard
+# generate the HTML monitoring dashboard.
+# I wanted a visual summary that anyone on the team can open in a browser
+# to quickly check the health of the model without having to read through logs
 logger.info("Generating HTML monitoring dashboard...")
 
 status_colour = "#e74c3c" if report["retraining_recommended"] else "#27ae60"
@@ -268,7 +279,7 @@ html = f"""<!DOCTYPE html>
     <div class="label">Baseline RMSE (kW)</div>
   </div>
   <div class="metric-card">
-    <div class="value">{'%.4f' % rmse_ratio if rmse_ratio else 'N/A'}</div>
+    <div class="value">{"%.4f" % rmse_ratio if rmse_ratio else "N/A"}</div>
     <div class="label">RMSE Ratio vs Baseline</div>
   </div>
 </div>

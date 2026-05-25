@@ -2,25 +2,24 @@ import os
 import json
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")  # headless backend - no display available in CI environments
+matplotlib.use("Agg")  # needed for headless CI - no display available on the runner
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # suppress tensorflow info/warning logs
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # stop tensorflow printing walls of info logs
 
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, BatchNormalization, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
-# create output directories if they don't already exist
 os.makedirs("artifacts/models", exist_ok=True)
 os.makedirs("artifacts/metrics", exist_ok=True)
 os.makedirs("artifacts/metadata", exist_ok=True)
 
-# load preprocessed data from artifacts/data/.
-# lowercase filenames are used throughout to stay consistent on
-# case-sensitive Linux filesystems (GitHub Actions runs on ubuntu-latest)
+# load the preprocessed arrays produced by preprocess_new_data.py.
+# these come from the previous DVC stage so they should always be
+# up to date with whatever data was most recently pushed
 x_train = np.load("artifacts/data/x_train.npy")
 y_train = np.load("artifacts/data/y_train.npy")
 x_val   = np.load("artifacts/data/x_val.npy")
@@ -33,17 +32,25 @@ print(f"y_train : {y_train.shape}")
 print(f"x_val   : {x_val.shape}")
 print(f"x_test  : {x_test.shape}")
 
-n_features = x_train.shape[1]  # number of input features (9 after feature engineering)
-n_targets  = y_train.shape[1]  # number of output targets (3 zones)
+n_features = x_train.shape[1]  # 9 input features after feature engineering
+n_targets  = y_train.shape[1]  # 3 output targets - one per zone
 
-# build a feedforward regression network.
-# the architecture uses two hidden layers with batch normalisation and dropout:
-#   - batch normalisation stabilises training by normalising layer inputs,
-#     which reduces sensitivity to learning rate and speeds up convergence
-#   - dropout (0.2) randomly zeros 20% of neurons each forward pass during
-#     training, which acts as regularisation and reduces overfitting
-#   - the output layer has n_targets units with no activation since this
-#     is a regression task - we want raw continuous predictions, not probabilities
+# I built a feedforward neural network for multi-output regression.
+# the architecture has two hidden layers, each followed by BatchNormalization
+# and Dropout - both of which were covered in Week 6.
+#
+# BatchNormalization normalises the activations coming out of each layer
+# during training. this stabilises learning and reduces how sensitive
+# the model is to the initial learning rate - basically keeps things in a
+# reasonable range so training doesn't go all over the place.
+#
+# Dropout randomly zeros out 20% of neurons each forward pass during training.
+# I used this as a regularisation technique to stop the network from relying
+# too heavily on any single neuron, which helps reduce overfitting on the
+# training set.
+#
+# the output layer has no activation since this is a regression task -
+# I want raw continuous predictions, not probabilities
 model = Sequential([
     Dense(128, activation="relu", input_shape=(n_features,)),
     BatchNormalization(),
@@ -52,13 +59,17 @@ model = Sequential([
     BatchNormalization(),
     Dropout(0.2),
     Dense(32, activation="relu"),
-    Dense(n_targets)  # no activation - regression output for all three zones
+    Dense(n_targets)
 ], name="tetouan_power_forecasting_model")
 
-# adam optimiser with gradient clipping to prevent exploding gradients.
-# clipnorm=1.0 scales down any gradient whose L2 norm exceeds 1.0 during
-# backpropagation - this keeps training stable especially in early epochs
-# when weights are far from their optimal values
+# Adam optimiser with gradient clipping (clipnorm=1.0).
+# gradient clipping was covered in Week 6 as one of the main strategies
+# for dealing with exploding gradients during backpropagation. if any
+# gradient's L2 norm goes above 1.0 it gets scaled down automatically.
+# this keeps training stable especially in the early epochs when weights
+# are still far from their optimal values and gradients can get really large.
+# I chose Adam over plain SGD because it adapts the learning rate per
+# parameter and generally converges much faster
 model.compile(
     optimizer=Adam(learning_rate=0.001, clipnorm=1.0),
     loss="mse",
@@ -67,12 +78,16 @@ model.compile(
 
 model.summary()
 
-# callbacks used during training:
-#   - EarlyStopping: stops training if val_loss hasn't improved for 15 epochs,
-#     then restores the best weights seen during training. this prevents
-#     wasted compute and avoids overfitting to the training set
-#   - ReduceLROnPlateau: halves the learning rate if val_loss plateaus for
-#     8 epochs - helps the model fine-tune once it gets close to a minimum
+# two callbacks to help training run more efficiently.
+#
+# EarlyStopping watches validation loss and stops training if it hasn't
+# improved for 15 epochs, then restores the weights from the best epoch.
+# this saves time and stops the model from overfitting - I set patience
+# to 15 to give it enough room to work through plateaus before giving up.
+#
+# ReduceLROnPlateau halves the learning rate if val_loss plateaus for
+# 8 epochs. once the model gets close to a minimum, smaller updates
+# help it fine-tune without overshooting
 callbacks = [
     EarlyStopping(
         monitor="val_loss",
@@ -104,17 +119,21 @@ print(f"Training finished at epoch {len(history.history['loss'])}")
 print(f"Final train loss : {history.history['loss'][-1]:.2f}")
 print(f"Final val loss   : {history.history['val_loss'][-1]:.2f}")
 
-# save the final trained model
+# save the trained model so the evaluate and monitor stages can load it
+# without needing to retrain everything from scratch each time
 model.save("artifacts/models/model.keras")
 print("Model saved to artifacts/models/model.keras")
 
-# save full training history as JSON so it can be inspected later
-# without needing to retrain - also used by evaluate.py for plotting
+# save the full training history as JSON.
+# evaluate.py uses this to generate loss curve plots without retraining.
+# I also store it so we can compare training runs across retraining cycles
 history_dict = {k: [float(v) for v in vals] for k, vals in history.history.items()}
 with open("artifacts/metrics/training_history.json", "w") as f:
     json.dump(history_dict, f, indent=2)
 
-# save model version and retrain timestamp to metadata
+# write version and timestamp to metadata for traceability.
+# this way we always know exactly when this model was trained and
+# can track it across the full retraining history
 with open("artifacts/metadata/model_version.txt", "w") as f:
     f.write("v1.0")
 

@@ -6,39 +6,45 @@ import json
 import os
 from datetime import datetime
 
-# create output directories if they don't already exist
+# make sure all the output folders exist before we try writing to them
 os.makedirs("artifacts/data", exist_ok=True)
 os.makedirs("artifacts/preprocessing", exist_ok=True)
 os.makedirs("artifacts/metadata", exist_ok=True)
 
-# load the raw Tetouan City Power Consumption dataset
-# the CSV lives in data/raw/ and is never modified directly -
-# all transformations are applied to a copy so the original stays intact
+# load the raw Tetouan City Power Consumption dataset from data/raw/.
+# I never modify the original CSV directly - all transformations get saved
+# separately so the raw file always stays intact as the source of truth
 df = pd.read_csv("data/raw/Tetuan City power consumption.csv")
 print(f"Loaded {len(df)} rows, {len(df.columns)} columns")
 
-# parse the DateTime column so we can extract time-based features later.
-# the format in the CSV is day/month/year hour:minute so we set dayfirst=True
+# parse the DateTime column using mixed format since the CSV has
+# inconsistent date formatting across some rows
 df["DateTime"] = pd.to_datetime(df["DateTime"], format="mixed")
 
-# data cleaning
+# basic data cleaning.
+# I used forward-fill for missing values rather than dropping them because
+# this is time-series data - carrying the last known value forward preserves
+# the temporal pattern better than leaving gaps or using a global mean.
+# duplicate rows get dropped as well just to be safe
 print("Cleaning data...")
-df.ffill(inplace=True)           # forward-fill any missing values to preserve temporal ordering
-df.drop_duplicates(inplace=True) # remove exact duplicate rows
+df.ffill(inplace=True)
+df.drop_duplicates(inplace=True)
 print(f"After cleaning: {len(df)} rows")
 
 # extract time-based features from the DateTime column.
-# these were identified in Sprint 1 EDA as having strong correlations
-# with consumption patterns - hour of day and month in particular showed
-# clear cyclical trends in the data that the model needs to be aware of
-df["hour_of_day"]  = df["DateTime"].dt.hour
-df["day_of_week"]  = df["DateTime"].dt.dayofweek   # 0=Monday, 6=Sunday
-df["month"]        = df["DateTime"].dt.month
-df["is_weekend"]   = (df["DateTime"].dt.dayofweek >= 5).astype(int)
+# from our Sprint 1 EDA, hour of day and month both showed strong
+# correlations with consumption - which makes sense given peak usage
+# hours during the day and seasonal patterns across the year.
+# I also added day_of_week and is_weekend since weekday vs weekend
+# consumption patterns tend to be quite different
+df["hour_of_day"] = df["DateTime"].dt.hour
+df["day_of_week"] = df["DateTime"].dt.dayofweek  # 0=Monday, 6=Sunday
+df["month"]       = df["DateTime"].dt.month
+df["is_weekend"]  = (df["DateTime"].dt.dayofweek >= 5).astype(int)
 
-# define the feature set and target columns.
-# using all five weather features plus the four time-based features derived above.
-# the three zone consumption columns are the regression targets
+# 9 input features total - 5 weather features from the original dataset
+# plus the 4 time-based features derived above.
+# the targets are the three zone-level power consumption columns
 feature_cols = [
     "Temperature",
     "Humidity",
@@ -60,11 +66,12 @@ target_cols = [
 x = df[feature_cols].values
 y = df[target_cols].values
 
-# chronological 70/15/15 train/validation/test split.
-# a random split is deliberately avoided here because this is time-series data -
-# a random split would allow future observations to leak into the training set,
-# which would give inflated performance metrics that don't reflect real-world behaviour.
-# the chronological split ensures the model is always evaluated on genuinely unseen future data
+# chronological 70/15/15 split - this is really important for time-series data.
+# I avoided a random split here because it would allow future observations
+# to end up in the training set, which basically means the model gets to
+# peek at the future during training and ends up with inflated metrics
+# that don't reflect real performance. keeping it chronological avoids
+# that data leakage problem entirely
 print("Splitting data...")
 n         = len(df)
 train_end = int(n * 0.70)
@@ -80,18 +87,20 @@ y_test  = y[val_end:]
 
 print(f"Train: {len(x_train)} | Val: {len(x_val)} | Test: {len(x_test)}")
 
-# normalise features using StandardScaler.
-# the scaler is fit only on the training set to prevent data leakage -
-# fitting on the full dataset would let information from the validation and test
-# sets influence the scaling, which would make the evaluation unfair
+# normalise features using StandardScaler (zero mean, unit variance).
+# one thing to note - I only fit the scaler on the training set and then
+# apply the same transformation to val and test. fitting on the full dataset
+# would let test set statistics influence the scaling, which is another
+# form of data leakage we want to avoid
 print("Normalising features...")
 scaler  = StandardScaler()
 x_train = scaler.fit_transform(x_train)
 x_val   = scaler.transform(x_val)
 x_test  = scaler.transform(x_test)
 
-# save the processed numpy arrays to artifacts/data/
-# lowercase filenames used throughout for consistency on case-sensitive Linux filesystems
+# save everything to artifacts/data/ using lowercase filenames throughout.
+# lowercase matters here because GitHub Actions runs on ubuntu-latest which
+# is case-sensitive - mixing cases would cause file not found errors in CI
 np.save("artifacts/data/x_train.npy", x_train)
 np.save("artifacts/data/y_train.npy", y_train)
 np.save("artifacts/data/x_val.npy",   x_val)
@@ -99,16 +108,15 @@ np.save("artifacts/data/y_val.npy",   y_val)
 np.save("artifacts/data/x_test.npy",  x_test)
 np.save("artifacts/data/y_test.npy",  y_test)
 
-# save the fitted scaler so the same transformation can be applied to new data
-# during inference or retraining without needing to refit from scratch
+# save the fitted scaler so I can apply the exact same transformation
+# to any new data that comes in later without having to refit from scratch
 joblib.dump(scaler, "artifacts/preprocessing/scaler.pkl")
 
-# save the feature column list so downstream scripts know exactly which
-# features were used and in what order - important for reproducibility
+# save the feature list so downstream scripts know which features were used
+# and in what order - this helps with reproducibility across retraining runs
 with open("artifacts/preprocessing/feature_columns.json", "w") as f:
     json.dump(feature_cols, f, indent=2)
 
-# write data version and timestamp to metadata
 with open("artifacts/metadata/data_version.txt", "w") as f:
     f.write("v1.0")
 

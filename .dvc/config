@@ -4,3 +4,4 @@
     url = https://dagshub.com/amcdon0/CL07_G03.dvc
 ['remote "myremote"']
     url = gdrive://17yGjqUJXESOChYrnCJSyWVTXkc5HHicF
+    gdrive_use_service_account = false
