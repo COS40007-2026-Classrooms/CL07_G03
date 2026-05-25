@@ -1,4 +1,6 @@
 [core]
-    remote = origin
+    remote = myremote
 ['remote "origin"']
     url = https://dagshub.com/amcdon0/CL07_G03.dvc
+['remote "myremote"']
+    url = gdrive://17yGjqUJXESOChYrnCJSyWVTXkc5HHicF
