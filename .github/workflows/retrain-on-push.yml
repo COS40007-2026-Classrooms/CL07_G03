@@ -1,0 +1,111 @@
+name: Automated ML Retraining Pipeline
+
+on:
+  # trigger 1 - runs automatically whenever new data is pushed to main.
+  # the paths filter means the pipeline only fires when something in the
+  # data/ folder actually changes, not on every single commit to the repo.
+  # this is the core automated retraining trigger for the MLOps pipeline
+  push:
+    branches: [ main ]
+    paths:
+      - "data/**"
+
+  # trigger 2 - scheduled retraining every week on sunday at midnight UTC.
+  # this acts as a safety net to catch gradual drift that might not have
+  # caused a data push yet - ensures the model is always reasonably fresh
+  # regardless of whether new data has been uploaded that week
+  schedule:
+    - cron: "0 0 * * 0"
+
+  # trigger 3 - allows the pipeline to be triggered manually from the
+  # GitHub Actions UI at any time without needing a git push or waiting
+  # for the schedule. useful for testing or on-demand retraining
+  workflow_dispatch:
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+
+    steps:
+      # pull the full repo code into the runner including all committed files
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # set up Python 3.11 - pinning the version keeps the environment
+      # consistent across every run so there are no surprise library conflicts
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # cache pip packages based on a hash of requirements.txt so repeat
+      # runs don't re-download everything. the cache is automatically
+      # invalidated when requirements.txt changes
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # install all Python dependencies including DVC and the ML stack
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # configure the DVC remote credentials from GitHub secrets so the
+      # runner can pull and push data to DagHub without storing credentials
+      # in the repo. DAGSHUB_TOKEN is stored as a GitHub Actions secret
+      - name: Configure DVC remote credentials
+        run: |
+          dvc remote modify origin --local auth basic
+          dvc remote modify origin --local user ${{ secrets.DAGSHUB_USERNAME }}
+          dvc remote modify origin --local password ${{ secrets.DAGSHUB_TOKEN }}
+
+      # pull the latest data files tracked by DVC from the DagHub remote.
+      # this ensures the runner has the most recent version of the dataset
+      # even though large files are not stored directly in git
+      - name: Pull data from DVC remote
+        run: dvc pull --no-run-cache
+
+      # run the full DVC pipeline - preprocess -> train -> evaluate -> monitor.
+      # dvc repro only re-runs stages whose dependencies have changed,
+      # so if only the data changed it will re-run all four stages.
+      # if nothing has changed it skips everything (cached run)
+      - name: Run DVC pipeline
+        run: dvc repro
+
+      # push any newly generated artifacts (model, metrics, plots) back to
+      # the DagHub remote so they are versioned and available for download
+      - name: Push artifacts to DVC remote
+        run: dvc push
+
+      # commit the updated dvc.lock file back to the repo so the exact
+      # pipeline state (which data produced which model) is always recorded
+      # in git history - this is what makes DVC reproducible
+      - name: Commit updated DVC lock file
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dvc.lock
+          git diff --staged --quiet || git commit -m "chore: update dvc.lock after automated retraining [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # upload key artifacts as GitHub Actions downloadable files.
+      # this means the evaluation plots, drift report, and metrics are
+      # all accessible from the Actions UI without needing to pull from DagHub
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-artifacts
+          path: |
+            artifacts/metrics/evaluation_metrics.json
+            artifacts/metrics/loss_curves.png
+            artifacts/metrics/actual_vs_predicted.png
+            artifacts/metrics/monitoring_metrics.json
+            reports/drift_report.json
+            reports/monitoring_dashboard.html
+            artifacts/metadata/model_version.txt
+            artifacts/metadata/last_retrain.txt
