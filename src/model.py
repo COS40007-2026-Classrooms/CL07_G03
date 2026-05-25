@@ -11,7 +11,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # suppress tensorflow info/warning log
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, BatchNormalization, Dropout
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 
 # create output directories if they don't already exist
 os.makedirs("artifacts/models", exist_ok=True)
@@ -73,8 +73,6 @@ model.summary()
 #     wasted compute and avoids overfitting to the training set
 #   - ReduceLROnPlateau: halves the learning rate if val_loss plateaus for
 #     8 epochs - helps the model fine-tune once it gets close to a minimum
-#   - ModelCheckpoint: saves the best model weights during training so we
-#     always have the best version even if later epochs are worse
 callbacks = [
     EarlyStopping(
         monitor="val_loss",
@@ -88,12 +86,6 @@ callbacks = [
         patience=8,
         min_lr=1e-6,
         verbose=1
-    ),
-    ModelCheckpoint(
-        filepath="artifacts/models/model_best.keras",
-        monitor="val_loss",
-        save_best_only=True,
-        verbose=0
     )
 ]
 
