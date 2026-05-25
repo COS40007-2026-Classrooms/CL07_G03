@@ -19,7 +19,7 @@ print(f"Loaded {len(df)} rows, {len(df.columns)} columns")
 
 # parse the DateTime column so we can extract time-based features later.
 # the format in the CSV is day/month/year hour:minute so we set dayfirst=True
-df["DateTime"] = pd.to_datetime(df["DateTime"], dayfirst=True)
+df["DateTime"] = pd.to_datetime(df["DateTime"], format="mixed")
 
 # data cleaning
 print("Cleaning data...")
