@@ -1,0 +1,75 @@
+stages:
+
+  # stage 1 - preprocess
+  # loads the raw Tetouan CSV, cleans it, engineers time-based features,
+  # applies the chronological 70/15/15 split, normalises with StandardScaler,
+  # and saves the processed numpy arrays and scaler to artifacts/
+  preprocess:
+    cmd: python src/preprocess_new_data.py
+    deps:
+      - src/preprocess_new_data.py
+      - data/raw/Tetuan City power consumption.csv
+    outs:
+      - artifacts/data/x_train.npy
+      - artifacts/data/y_train.npy
+      - artifacts/data/x_val.npy
+      - artifacts/data/y_val.npy
+      - artifacts/data/x_test.npy
+      - artifacts/data/y_test.npy
+      - artifacts/preprocessing/scaler.pkl
+      - artifacts/preprocessing/feature_columns.json
+      - artifacts/metadata/data_version.txt
+
+  # stage 2 - train
+  # builds and trains the Keras regression model on the preprocessed data,
+  # saves the trained model to artifacts/models/, and logs training history
+  # and metadata. depends on the outputs of the preprocess stage
+  train:
+    cmd: python src/model.py
+    deps:
+      - src/model.py
+      - artifacts/data/x_train.npy
+      - artifacts/data/y_train.npy
+      - artifacts/data/x_val.npy
+      - artifacts/data/y_val.npy
+    outs:
+      - artifacts/models/model.keras
+      - artifacts/metrics/training_history.json
+      - artifacts/metadata/model_version.txt
+      - artifacts/metadata/last_retrain.txt
+
+  # stage 3 - evaluate
+  # loads the trained model and evaluates it on the held-out test set.
+  # calculates RMSE, MAE, and R² per zone and overall, generates loss curves
+  # and actual vs predicted scatter plots, and saves everything to artifacts/metrics/
+  evaluate:
+    cmd: python src/evaluate.py
+    deps:
+      - src/evaluate.py
+      - artifacts/models/model.keras
+      - artifacts/data/x_test.npy
+      - artifacts/data/y_test.npy
+      - artifacts/metrics/training_history.json
+    outs:
+      - artifacts/metrics/evaluation_metrics.json
+      - artifacts/metrics/loss_curves.png
+      - artifacts/metrics/actual_vs_predicted.png
+
+  # stage 4 - monitor
+  # runs drift detection and performance monitoring on the trained model.
+  # PSI detects data drift in input features, KS test detects concept drift
+  # in prediction distributions, and rolling RMSE is checked against the
+  # baseline. outputs a drift report JSON and an HTML monitoring dashboard
+  monitor:
+    cmd: python src/monitor.py
+    deps:
+      - src/monitor.py
+      - artifacts/models/model.keras
+      - artifacts/data/x_train.npy
+      - artifacts/data/x_test.npy
+      - artifacts/data/y_test.npy
+      - artifacts/metrics/evaluation_metrics.json
+    outs:
+      - reports/drift_report.json
+      - reports/monitoring_dashboard.html
+      - artifacts/metrics/monitoring_metrics.json
