@@ -264,7 +264,7 @@ html = f"""<!DOCTYPE html>
     <div class="label">Current RMSE (kW)</div>
   </div>
   <div class="metric-card">
-    <div class="value">{baseline_rmse:.0f if baseline_rmse else 'N/A'}</div>
+    <div class="value">{f"{baseline_rmse:.0f}" if baseline_rmse else "N/A"}</div>
     <div class="label">Baseline RMSE (kW)</div>
   </div>
   <div class="metric-card">
