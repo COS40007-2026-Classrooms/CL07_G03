@@ -5,7 +5,7 @@ stages:
   # applies the chronological 70/15/15 split, normalises with StandardScaler,
   # and saves the processed numpy arrays and scaler to artifacts/
   preprocess:
-    cmd: python src/preprocess_new_data.py
+    cmd: python3 src/preprocess_new_data.py
     deps:
       - src/preprocess_new_data.py
       - data/raw/Tetuan City power consumption.csv
@@ -25,7 +25,7 @@ stages:
   # saves the trained model to artifacts/models/, and logs training history
   # and metadata. depends on the outputs of the preprocess stage
   train:
-    cmd: python src/model.py
+    cmd: python3 src/model.py
     deps:
       - src/model.py
       - artifacts/data/x_train.npy
@@ -43,7 +43,7 @@ stages:
   # calculates RMSE, MAE, and R² per zone and overall, generates loss curves
   # and actual vs predicted scatter plots, and saves everything to artifacts/metrics/
   evaluate:
-    cmd: python src/evaluate.py
+    cmd: python3 src/evaluate.py
     deps:
       - src/evaluate.py
       - artifacts/models/model.keras
@@ -61,7 +61,7 @@ stages:
   # in prediction distributions, and rolling RMSE is checked against the
   # baseline. outputs a drift report JSON and an HTML monitoring dashboard
   monitor:
-    cmd: python src/monitor.py
+    cmd: python3 src/monitor.py
     deps:
       - src/monitor.py
       - artifacts/models/model.keras
