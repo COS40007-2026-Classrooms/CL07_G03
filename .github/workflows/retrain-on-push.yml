@@ -54,15 +54,15 @@ jobs:
         run: pip install -r requirements.txt
 
       # configure the DVC remote credentials from GitHub secrets so the
-      # runner can pull and push data to DagHub without storing credentials
-      # in the repo. DAGSHUB_TOKEN is stored as a GitHub Actions secret
+      # runner can pull and push data to remote storage without storing
+      # credentials in the repo - tokens are stored as GitHub Actions secrets
       - name: Configure DVC remote credentials
         run: |
           dvc remote modify origin --local auth basic
           dvc remote modify origin --local user ${{ secrets.DAGSHUB_USERNAME }}
           dvc remote modify origin --local password ${{ secrets.DAGSHUB_TOKEN }}
 
-      # pull the latest data files tracked by DVC from the DagHub remote.
+      # pull the latest data files tracked by DVC from remote storage.
       # this ensures the runner has the most recent version of the dataset
       # even though large files are not stored directly in git
       - name: Pull data from DVC remote
@@ -76,7 +76,7 @@ jobs:
         run: dvc repro
 
       # push any newly generated artifacts (model, metrics, plots) back to
-      # the DagHub remote so they are versioned and available for download
+      # remote storage so they are versioned and available for download
       - name: Push artifacts to DVC remote
         run: dvc push
 
@@ -95,7 +95,7 @@ jobs:
 
       # upload key artifacts as GitHub Actions downloadable files.
       # this means the evaluation plots, drift report, and metrics are
-      # all accessible from the Actions UI without needing to pull from DagHub
+      # all accessible from the Actions UI after each pipeline run
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
