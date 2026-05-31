@@ -53,16 +53,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # configure the DVC remote credentials from GitHub secrets so the
-      # runner can pull and push data to remote storage without storing
-      # credentials in the repo - tokens are stored as GitHub Actions secrets
+      # write the service account JSON from GitHub secrets to a temp file
+      # so DVC can authenticate with Google Drive without needing browser login
       - name: Configure DVC remote credentials
         run: |
-          dvc remote modify origin --local auth basic
-          dvc remote modify origin --local user ${{ secrets.DAGSHUB_USERNAME }}
-          dvc remote modify origin --local password ${{ secrets.DAGSHUB_TOKEN }}
+          echo '${{ secrets.GDRIVE_SERVICE_ACCOUNT }}' > /tmp/gdrive_service_account.json
 
-      # pull the latest data files tracked by DVC from remote storage.
+      # pull the latest data files tracked by DVC from Google Drive remote.
       # this ensures the runner has the most recent version of the dataset
       # even though large files are not stored directly in git
       - name: Pull data from DVC remote
@@ -76,7 +73,7 @@ jobs:
         run: dvc repro
 
       # push any newly generated artifacts (model, metrics, plots) back to
-      # remote storage so they are versioned and available for download
+      # Google Drive remote so they are versioned and available for download
       - name: Push artifacts to DVC remote
         run: dvc push
 
