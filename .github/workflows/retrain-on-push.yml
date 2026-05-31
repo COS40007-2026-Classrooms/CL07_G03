@@ -63,7 +63,7 @@ jobs:
       # this ensures the runner has the most recent version of the dataset
       # even though large files are not stored directly in git
       - name: Pull data from DVC remote
-        run: dvc pull --no-run-cache
+        run: dvc pull
 
       # run the full DVC pipeline - preprocess -> train -> evaluate -> monitor.
       # dvc repro only re-runs stages whose dependencies have changed,
