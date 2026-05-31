@@ -51,9 +51,7 @@ jobs:
 
       # install all Python dependencies including DVC and the ML stack
       - name: Install dependencies
-        run: |
-          pip install pathspec==1.1.1
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       # write the service account JSON from GitHub secrets to a temp file
       # so DVC can authenticate with Google Drive without needing browser login

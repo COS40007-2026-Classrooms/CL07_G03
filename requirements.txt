@@ -9,5 +9,4 @@ keras==2.15.0        # high-level neural network API - bundled with tensorflow
 scikit-learn==1.4.2  # preprocessing - StandardScaler, metrics (RMSE, MAE, R²)
 joblib==1.3.2        # serialisation - saving and loading the fitted scaler
 scipy==1.12.0        # statistical tests - KS test for concept drift detection
-dvc==3.49.0          # data version control - pipeline management and remote storage
-pathspec==1.1.1     # file pattern matching - used by DVC for tracking files
+dvc[gdrive]>=3.50.0  # data version control - pipeline management and remote storage
