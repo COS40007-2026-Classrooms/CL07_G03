@@ -74,7 +74,7 @@ stages:
     outs:
     - path: artifacts/metadata/last_retrain.txt
       hash: md5
-      md5: 11cad6944097c4aa658283839b0b8b92
+      md5: a070656a084c7f0086e699ce32c51393
       size: 19
     - path: artifacts/metadata/model_version.txt
       hash: md5
@@ -82,11 +82,11 @@ stages:
       size: 4
     - path: artifacts/metrics/training_history.json
       hash: md5
-      md5: 2162911ffbd42972de8d7f0e6afe30e4
-      size: 4786
+      md5: a1fa04aee3b2d04d27eadb0a9e4256d2
+      size: 4579
     - path: artifacts/models/model.keras
       hash: md5
-      md5: dc532bd080763c7941926f599c1902db
+      md5: c51b2cf3c327aea10ec2dec79def361b
       size: 193075
   evaluate:
     cmd: python3 src/evaluate.py
@@ -101,11 +101,11 @@ stages:
       size: 188840
     - path: artifacts/metrics/training_history.json
       hash: md5
-      md5: 2162911ffbd42972de8d7f0e6afe30e4
-      size: 4786
+      md5: a1fa04aee3b2d04d27eadb0a9e4256d2
+      size: 4579
     - path: artifacts/models/model.keras
       hash: md5
-      md5: dc532bd080763c7941926f599c1902db
+      md5: c51b2cf3c327aea10ec2dec79def361b
       size: 193075
     - path: src/evaluate.py
       hash: md5
@@ -114,16 +114,16 @@ stages:
     outs:
     - path: artifacts/metrics/actual_vs_predicted.png
       hash: md5
-      md5: 7ff384a1887a18c96bfdf761c75fded6
-      size: 424817
+      md5: 387cb1e5a1e31a96b32a23ba02ab0c6d
+      size: 577893
     - path: artifacts/metrics/evaluation_metrics.json
       hash: md5
-      md5: 080a2b18a9fb2af2c9f6ad9edcc9d9ed
-      size: 443
+      md5: 66e12f1b94f0721561a921a454cb7687
+      size: 442
     - path: artifacts/metrics/loss_curves.png
       hash: md5
-      md5: 717da334556bd08ef2017d511efd7ef3
-      size: 93792
+      md5: 228a7603e53c177bfd8c7a8bb78a9b82
+      size: 95709
   monitor:
     cmd: python3 src/monitor.py
     deps:
@@ -141,11 +141,11 @@ stages:
       size: 188840
     - path: artifacts/metrics/evaluation_metrics.json
       hash: md5
-      md5: 080a2b18a9fb2af2c9f6ad9edcc9d9ed
-      size: 443
+      md5: 66e12f1b94f0721561a921a454cb7687
+      size: 442
     - path: artifacts/models/model.keras
       hash: md5
-      md5: dc532bd080763c7941926f599c1902db
+      md5: c51b2cf3c327aea10ec2dec79def361b
       size: 193075
     - path: src/monitor.py
       hash: md5
@@ -154,13 +154,13 @@ stages:
     outs:
     - path: artifacts/metrics/monitoring_metrics.json
       hash: md5
-      md5: 0993f583a1dfd17ac432ca07191e57b3
+      md5: 5f8b1176bcda8972c629cd73314135fc
       size: 196
     - path: reports/drift_report.json
       hash: md5
-      md5: 212ed5edb8646867e6c5f286f6ea4308
-      size: 1001
+      md5: 72f688e7fd383ef60813c363a9028608
+      size: 1038
     - path: reports/monitoring_dashboard.html
       hash: md5
-      md5: d0e572b94ed5fff685193e87580da5ea
+      md5: d9c38da40fe00c41537d7a3c2c59a643
       size: 3906
