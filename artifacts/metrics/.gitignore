@@ -1,1 +1,5 @@
 /monitoring_metrics.json
+/training_history.json
+/evaluation_metrics.json
+/loss_curves.png
+/actual_vs_predicted.png
